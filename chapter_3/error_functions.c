@@ -27,44 +27,127 @@ terminate(Boolean useExit3) {
     }
 }
 
+/** Internal function for ouputting the error passed in. Checks to see whether or not to flush
+ * stdout along with the error.
+ */
 static void
 outputError(Boolean useErr, int err, Boolean flushStdout, const char *format, va_list ap) {
 
+    #define BUF_SIZE 500
+    char buf[BUF_SIZE], userMsg[BUF_SIZE], errText[BUF_SIZE];
+
+    vsnprintf(userMsg, BUF_SIZE, format, ap);
+
+    if (useErr) {
+        snprintf(errText, BUF_SIZE, " [%s %s]", (err > 0 && err <= MAX_ENAME) ? ename[err] : "?UNKNOWN?", strerror(err));
+    } else {
+        snprintf(errText, BUF_SIZE, ":");
+    }
+
+    snprintf(buf, BUF_SIZE, "ERROR%s %s\n", errText, userMsg);
+
+    if (flushStdout) {
+        fflush(stdout);             /* Flush any pending output */
+    }
+    fputs(buf, stderr);
+    fflush(stderr);                 /* In case stderr is not line-buffered */
 }
-/** Prints a message on standard error. Same as printf(), except a terminating newline is 
- * appended to the output string.
- * Also prints the error text corresponding to the current value of errno.
- * 
- */
+
 void
-errMsg(const char *format) {
+errMsg(const char *format, ...) {
+
+    va_list argList;
+    int savedErrno;
+
+    savedErrno = errno;         /* In case we change it here */
+
+    va_start(argList, format);
+    outputError(TRUE, errno, TRUE, format, argList);
+    va_end(argList);
+
+    errno = savedErrno;
 
 }
-/** Prints a message on standard error and then exits the program using exit(), or abort() if EF_DUMPCORE is set.
- * Similar to err_exit(), however this function flushes the standard output before printing the error message
- * and does not automatically terminate using _exit().
- */
+
 void
-errExit(const char *format) {
+errExit(const char *format, ...) {
+    
+    va_list argList;
+
+    va_start(argList, format);
+    outputError(TRUE, errno, TRUE, format, argList);
+    va_end(argList);
+
+    terminate(TRUE);
+}
+
+void
+err_exit(const char *format, ...) {
+
+    va_list argList;
+
+    va_start(argList, format);
+    outputError(TRUE, errno, FALSE, format, argList);
+    va_end(argList);
+
+    terminate(FALSE);
 
 }
 
 void
 errExitEN(int errnum, const char *format, ...) {
 
+    va_list argList;
+
+    va_start(argList, format);
+    outputError(TRUE, errnum, TRUE, format, argList);
+    va_end(argList);
+
+    terminate(TRUE);
 }
 
 void
 fatal(const char *format, ...) {
 
+    va_list argList;
+
+    va_start(argList, format);
+    outputError(FALSE, 0, TRUE, format, argList);
+    va_end(argList);
+
+    terminate(TRUE);
 }
 
 void
 usageErr(const char *format, ...) {
 
+    va_list argList;
+
+    fflush(stdout);             // Flush any pending stdout
+
+    fprintf(stderr, "Usage: ");
+    va_start(argList, format);
+    vfprintf(stderr, format, argList);
+    va_end(argList);
+
+    fflush(stderr);             // In case stderr is not line-buffered
+    exit(EXIT_FAILURE);
+
 }
 
 void
 cmdLineErr(const char *format, ...) {
+
+    va_list argList;
+
+    fflush(stdout);             // Flush any pending stdout
+
+    fprintf(stderr, "Command-line usage error: ");
+    va_start(argList, format);
+    vfprintf(stderr, format, argList);
+    va_end(argList);
+
+    fflush(stderr);             // In case stderr is not line-buffered
+    exit(EXIT_FAILURE);
 
 }
